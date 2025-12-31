@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  /* Aquí definimos los colores para Tailwind v4 */
+  --color-coffee: #4b2c20;   /* Ajusta este código hex al café que quieras */
+  --color-cream: #f5f5dc;    /* Ajusta este código hex al crema que quieras */
+}
+
+@keyframes pop {
+  0% { transform: scale(0.9); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop { animation: pop 0.2s ease-out; }
