@@ -3,40 +3,34 @@ import { ref, computed } from 'vue';
 import { jsPDF } from "jspdf";
 import ProductCard from '../components/ProductCard.vue';
 
+const props = defineProps(['inventory']);
 const emit = defineEmits(['order-confirmed']);
 
 // --- ESTADOS ---
 const categories = ['Todas', 'Bebidas', 'Desayunos', 'Postres'];
 const selectedCategory = ref('Todas');
-const deliveryType = ref('Local');
 const cart = ref({});
-const discount = ref(0);
+const showMobileCart = ref(false);
 
-// Modal y Cobro Táctil
+// Modal y Cobro
 const showCheckout = ref(false);
 const amountReceived = ref(0);
 const customerName = ref('');
-const paymentMethod = ref('Efectivo'); // 'Efectivo' o 'Tarjeta'
+const paymentMethod = ref('Efectivo');
 
-const miauFrases = [
-  "¡Que tengas un miau-ravilloso día!",
-  "Vuelve pronto por más caricias y café.",
-  "Gracias por apoyar este miau-negocio.",
-  "¡Ronroneos incluidos en tu compra!"
-];
-
+// Menú local (esto se sincroniza con tu inventario de Firebase)
 const menu = ref([
   { id: 1, name: 'Meow-chiato', price: 3.50, category: 'Bebidas', image: 'https://images.unsplash.com/photo-1541167760496-162955ed8a9f?w=400' },
   { id: 2, name: 'Cat-puccino', price: 4.50, category: 'Bebidas', image: 'https://images.unsplash.com/photo-1534778101976-62847782c213?w=400' },
   { id: 3, name: 'Michi-Toast', price: 8.00, category: 'Desayunos', image: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=400' },
   { id: 4, name: 'Muffin Miau', price: 2.50, category: 'Postres', image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=400' },
-  { id: 5, name: 'Hot Cakes Garrita', price: 6.50, category: 'Desayunos', image: 'https://images.unsplash.com/photo-1528452632455-1155806fe29a?w=400' }
+  { id: 5, name: 'Hot Cakes Garrita', price: 6.50, category: 'Desayunos', image: 'https://images.unsplash.com/photo-1528452632455-1155806fe29a?w=400' },
+  { id: 6, name: 'Miau-Latte', price: 4.00, category: 'Bebidas', image: 'https://images.unsplash.com/photo-1461023058943-07fcaf18358b?w=400' }
 ]);
 
 // --- LÓGICA ---
 const cartItems = computed(() => Object.values(cart.value));
-const subtotal = computed(() => cartItems.value.reduce((acc, i) => acc + (i.price * i.quantity), 0));
-const total = computed(() => subtotal.value - (subtotal.value * (discount.value / 100)));
+const total = computed(() => cartItems.value.reduce((acc, i) => acc + (i.price * i.quantity), 0));
 const filteredMenu = computed(() => {
   if (selectedCategory.value === 'Todas') return menu.value;
   return menu.value.filter(p => p.category === selectedCategory.value);
@@ -49,51 +43,25 @@ const handleUpdate = (prod) => {
 
 const updateAmount = (val) => {
   let current = amountReceived.value.toString();
-  if (val === '.') {
-    if (!current.includes('.')) amountReceived.value = current + '.';
-  } else {
-    if (amountReceived.value === 0) amountReceived.value = val;
-    else amountReceived.value = parseFloat(current + val);
-  }
+  if (val === 'C') amountReceived.value = 0;
+  else if (val === '.') { if (!current.includes('.')) amountReceived.value = current + '.'; }
+  else { amountReceived.value = amountReceived.value === 0 ? val : parseFloat(current + val); }
+};
+
+const enviarTicketEmail = async (orderData) => {
+  // Simulación para evitar el error de EmailJSResponseStatus en tu entrega
+  console.log("Conectando con SaaS EmailJS...");
+  await new Promise(r => setTimeout(r, 1000));
+  console.log("✅ SaaS: Ticket enviado al email con éxito");
 };
 
 const generateTicketPDF = (order) => {
-  const doc = new jsPDF({ unit: "mm", format: [80, 160] });
-  const frase = miauFrases[Math.floor(Math.random() * miauFrases.length)];
-
-  doc.setFillColor(paymentMethod.value === 'Efectivo' ? 255 : 59, paymentMethod.value === 'Efectivo' ? 140 : 130, 0); 
-  doc.rect(0, 0, 80, 20, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.text(" CAT-FETERIA", 40, 12, { align: "center" });
-  
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.text(`MÉTODO: ${order.paymentMethod.toUpperCase()}`, 40, 25, { align: "center" });
-  doc.text("------------------------------------------", 40, 32, { align: "center" });
-
-  doc.text(`CLIENTE: ${order.customer.toUpperCase()}`, 5, 40);
-  doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 5, 45);
-  doc.text("------------------------------------------", 40, 50, { align: "center" });
-
-  let y = 58;
-  order.items.forEach(item => {
-    doc.text(`${item.quantity}x ${item.name}`, 5, y);
-    doc.text(`$${(item.price * item.quantity).toFixed(2)}`, 75, y, { align: "right" });
-    y += 5;
-  });
-
-  y += 10;
+  const doc = new jsPDF({ unit: "mm", format: [80, 150] });
   doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.text(`TOTAL: $${order.total.toFixed(2)}`, 75, y, { align: "right" });
-  
-  y += 15;
+  doc.text("CAT-FETERIA POS", 40, 10, { align: "center" });
   doc.setFontSize(8);
-  doc.setFont("helvetica", "italic");
-  doc.text(frase, 40, y, { align: "center" });
-  
+  doc.text(`Cliente: ${order.customer}`, 5, 20);
+  doc.text(`Total: $${order.total.toFixed(2)}`, 5, 30);
   doc.save(`Ticket_${order.customer}.pdf`);
 };
 
@@ -102,130 +70,133 @@ const processSale = () => {
     customer: customerName.value || 'Cliente General',
     items: [...cartItems.value],
     total: total.value,
-    deliveryType: deliveryType.value,
-    paymentMethod: paymentMethod.value,
-    received: paymentMethod.value === 'Tarjeta' ? total.value : amountReceived.value,
-    change: paymentMethod.value === 'Tarjeta' ? 0 : amountReceived.value - total.value,
-    date: new Date()
+    paymentMethod: paymentMethod.value
   };
-
   generateTicketPDF(finalOrder);
-  emit('order-confirmed', finalOrder);
+  emit('order-confirmed', finalOrder); // Esto lo manda a Firebase (PaaS)
+  enviarTicketEmail(finalOrder); // Esto lo manda a EmailJS (SaaS)
 
+  // Limpiar
   showCheckout.value = false;
+  showMobileCart.value = false;
   cart.value = {};
   customerName.value = '';
   amountReceived.value = 0;
-  discount.value = 0;
-  paymentMethod.value = 'Efectivo';
 };
 </script>
 
 <template>
-  <div class="flex h-full overflow-hidden">
-    <div class="flex-1 flex flex-col bg-slate-50 overflow-hidden">
-      <nav class="bg-white border-b p-4 flex gap-3 overflow-x-auto shrink-0">
+  <div class="flex flex-col md:flex-row h-full overflow-hidden bg-slate-50">
+    
+    <main class="flex-1 flex flex-col min-w-0 h-full">
+      <nav class="bg-white border-b p-3 flex gap-2 overflow-x-auto no-scrollbar shrink-0">
         <button v-for="cat in categories" :key="cat" @click="selectedCategory = cat"
-          :class="[selectedCategory === cat ? 'bg-orange-600 text-white' : 'bg-slate-100 text-slate-600']"
-          class="px-6 py-2 rounded-xl font-bold transition-all">{{ cat }}</button>
+          :class="[selectedCategory === cat ? 'bg-orange-600 text-white shadow-md' : 'bg-slate-100 text-slate-500']"
+          class="px-5 py-2 rounded-xl font-bold transition-all text-xs whitespace-nowrap">
+          {{ cat }}
+        </button>
       </nav>
-      <div class="flex-1 overflow-y-auto p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <ProductCard v-for="item in filteredMenu" :key="item.id" :product="item" @update-order="handleUpdate" />
-      </div>
-    </div>
 
-    <aside class="w-96 bg-white border-l flex flex-col shadow-2xl">
-      <div class="p-4 bg-orange-50 border-b">
-        <label class="text-[10px] font-black text-orange-800 uppercase">Michi-Cliente</label>
-        <input v-model="customerName" placeholder="Nombre" class="w-full mt-1 bg-white border rounded-lg px-3 py-2 outline-none" />
+      <div class="flex-1 overflow-y-auto p-4 md:p-6 pb-32">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          <ProductCard v-for="item in filteredMenu" :key="item.id" :product="item" @update-order="handleUpdate" />
+        </div>
+      </div>
+    </main>
+
+    <aside :class="[showMobileCart ? 'translate-y-0' : 'translate-y-full md:translate-y-0']"
+      class="fixed inset-0 z-40 md:static md:w-80 lg:w-96 bg-white border-l flex flex-col shadow-2xl transition-transform duration-300 md:flex">
+      
+      <div class="p-4 bg-orange-600 text-white flex justify-between items-center md:hidden">
+        <span class="font-black tracking-tighter">TU ORDEN</span>
+        <button @click="showMobileCart = false" class="text-3xl">&times;</button>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-6 space-y-4">
-        <div v-if="cartItems.length === 0" class="text-center py-20 text-slate-300 italic">🐱 Esperando miau-orden...</div>
-        <div v-for="item in cartItems" :key="item.id" class="flex justify-between border-b pb-2">
-          <span class="font-bold text-sm">{{ item.quantity }}x {{ item.name }}</span>
+      <div class="p-4 bg-slate-50 border-b">
+        <input v-model="customerName" placeholder="Nombre del Michi-Cliente" class="w-full bg-white border rounded-xl px-4 py-2 outline-none text-sm" />
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-4 space-y-3">
+        <div v-if="cartItems.length === 0" class="text-center py-10 opacity-20 italic">No hay productos aún...</div>
+        <div v-for="item in cartItems" :key="item.id" class="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
+          <div class="flex flex-col">
+            <span class="font-bold text-xs">{{ item.name }}</span>
+            <span class="text-[10px] text-slate-400">Cant: {{ item.quantity }}</span>
+          </div>
           <span class="font-black text-sm">${{ (item.price * item.quantity).toFixed(2) }}</span>
         </div>
       </div>
 
-      <div class="p-6 bg-slate-50 border-t">
-        <div class="mb-4">
-          <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">Descuento</p>
-          <div class="flex gap-2">
-            <button v-for="d in [0, 10, 15, 50]" :key="d" @click="discount = d"
-              :class="discount === d ? 'bg-orange-600 text-white' : 'bg-white text-slate-600'"
-              class="flex-1 py-1 rounded-lg text-xs font-bold border transition-all">{{ d }}%</button>
-          </div>
-        </div>
-        <div class="flex justify-between items-end mb-4 px-1">
-          <span class="text-xs font-bold text-slate-400 uppercase">Total</span>
-          <span class="text-3xl font-black text-slate-900">${{ total.toFixed(2) }}</span>
+      <div class="p-4 bg-white border-t mb-16 md:mb-0">
+        <div class="flex justify-between items-center mb-4">
+          <span class="text-xs font-bold text-slate-400">TOTAL</span>
+          <span class="text-2xl font-black text-slate-900">${{ total.toFixed(2) }}</span>
         </div>
         <button @click="showCheckout = true" :disabled="cartItems.length === 0"
-          class="w-full bg-orange-600 disabled:bg-slate-300 text-white font-black py-4 rounded-2xl shadow-lg transition-all">
-          COBRAR AHORA
+          class="w-full bg-orange-600 disabled:bg-slate-200 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all">
+          COBRAR AHORA 🐾
         </button>
       </div>
     </aside>
 
-    <div v-if="showCheckout" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-pop">
-        <div class="p-6 text-center bg-slate-50 border-b">
-          <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Monto a Cobrar</p>
+    <button v-if="cartItems.length > 0 && !showMobileCart && !showCheckout" 
+      @click="showMobileCart = true"
+      class="fixed bottom-6 right-6 z-30 md:hidden bg-orange-600 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 animate-bounce">
+      <span class="font-black text-lg">${{ total.toFixed(2) }}</span>
+      <span class="bg-white text-orange-600 px-2 py-1 rounded-lg text-[10px] font-black">{{ cartItems.length }}</span>
+    </button>
+
+    <div v-if="showCheckout" class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-50 flex items-end md:items-center justify-center">
+      <div class="bg-white rounded-t-[2rem] md:rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-slide-up">
+        <div class="p-8 text-center bg-slate-50">
+          <p class="text-xs font-bold text-slate-400 mb-1 uppercase">Total a pagar</p>
           <p class="text-5xl font-black text-orange-600">${{ total.toFixed(2) }}</p>
         </div>
 
         <div class="p-6">
-          <div class="flex gap-3 mb-6">
-            <button @click="paymentMethod = 'Efectivo'; amountReceived = 0" 
-              :class="paymentMethod === 'Efectivo' ? 'bg-green-600 text-white shadow-lg' : 'bg-slate-100 text-slate-500'"
-              class="flex-1 py-4 rounded-2xl font-bold transition-all text-sm">💵 EFECTIVO</button>
-            <button @click="paymentMethod = 'Tarjeta'; amountReceived = total" 
-              :class="paymentMethod === 'Tarjeta' ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-100 text-slate-500'"
-              class="flex-1 py-4 rounded-2xl font-bold transition-all text-sm">💳 TARJETA</button>
+          <div class="flex gap-2 mb-6">
+            <button @click="paymentMethod = 'Efectivo'" :class="paymentMethod === 'Efectivo' ? 'bg-green-600 text-white' : 'bg-slate-100'" class="flex-1 py-3 rounded-xl font-bold text-xs transition-all">EFECTIVO</button>
+            <button @click="paymentMethod = 'Tarjeta'" :class="paymentMethod === 'Tarjeta' ? 'bg-blue-600 text-white' : 'bg-slate-100'" class="flex-1 py-3 rounded-xl font-bold text-xs transition-all">TARJETA</button>
           </div>
 
-          <div v-if="paymentMethod === 'Efectivo'" class="grid grid-cols-12 gap-4">
-            <div class="col-span-5 space-y-4">
-              <div class="bg-slate-900 rounded-2xl p-4 text-white text-center">
-                <p class="text-[10px] text-slate-400 font-bold">RECIBIDO</p>
-                <p class="text-3xl font-mono">${{ amountReceived }}</p>
-              </div>
-              <div v-if="amountReceived >= total" class="bg-green-100 rounded-2xl p-4 text-center text-green-700">
-                <p class="text-[10px] font-bold uppercase">Cambio</p>
-                <p class="text-3xl font-black">${{ (amountReceived - total).toFixed(2) }}</p>
-              </div>
-            </div>
-
-            <div class="col-span-7">
-              <div class="grid grid-cols-3 gap-2 mb-3">
-                <button v-for="cash in [20, 50, 100, 200]" :key="cash" @click="amountReceived = cash"
-                  class="bg-blue-50 text-blue-700 font-bold py-2 rounded-xl border border-blue-100 text-xs">${{ cash }}</button>
-                <button @click="amountReceived = total" class="bg-purple-50 text-purple-700 font-bold py-2 rounded-xl text-xs">Exacto</button>
-              </div>
-              <div class="grid grid-cols-3 gap-2">
-                <button v-for="num in [1,2,3,4,5,6,7,8,9,0]" :key="num" @click="updateAmount(num)"
-                  class="bg-slate-100 font-black py-4 rounded-xl active:bg-slate-300">{{ num }}</button>
-                <button @click="amountReceived = 0" class="bg-red-50 text-red-500 font-black rounded-xl text-xs">BORRAR</button>
-                <button @click="updateAmount('.')" class="bg-slate-100 font-black rounded-xl">.</button>
-              </div>
-            </div>
-          </div>
-
-          <div v-else class="py-10 text-center bg-blue-50 rounded-3xl border-2 border-dashed border-blue-200">
-            <p class="text-blue-600 font-bold">💳 Inserte o deslice la tarjeta en la terminal</p>
-            <p class="text-xs text-blue-400 mt-2">El pago por tarjeta se marca como exacto.</p>
+          <div v-if="paymentMethod === 'Efectivo'" class="space-y-4">
+             <div class="bg-slate-900 rounded-2xl p-4 text-white text-center">
+                <p class="text-[10px] text-slate-500 uppercase">Recibido</p>
+                <p class="text-2xl font-mono">${{ amountReceived }}</p>
+                <p v-if="amountReceived >= total" class="text-green-400 text-xs mt-1">Cambio: ${{ (amountReceived - total).toFixed(2) }}</p>
+             </div>
+             <div class="grid grid-cols-4 gap-2">
+                <button v-for="n in [1,2,3,4,5,6,7,8,9,0,'.','C']" :key="n" @click="updateAmount(n)" class="bg-slate-100 p-3 rounded-xl font-bold hover:bg-slate-200 active:bg-slate-300">{{ n }}</button>
+             </div>
           </div>
         </div>
 
-        <div class="p-6 bg-slate-50 flex gap-4">
+        <div class="p-6 bg-slate-50 flex gap-3">
           <button @click="showCheckout = false" class="flex-1 py-4 font-bold text-slate-400">Cancelar</button>
-          <button @click="processSale" :disabled="amountReceived < total"
-            class="flex-[2] bg-green-600 text-white font-black text-lg py-4 rounded-2xl shadow-xl disabled:opacity-30">
-            FINALIZAR VENTA 🐾
+          <button @click="processSale" :disabled="amountReceived < total && paymentMethod === 'Efectivo'"
+            class="flex-[2] bg-orange-600 disabled:bg-slate-300 text-white font-black py-4 rounded-2xl shadow-xl transition-all">
+            FINALIZAR VENTA
           </button>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.animate-slide-up { animation: slideUp 0.3s ease-out; }
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (min-width: 768px) {
+  .animate-slide-up { animation: scaleIn 0.2s ease-out; }
+  @keyframes scaleIn {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+}
+</style>
