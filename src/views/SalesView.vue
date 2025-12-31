@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { jsPDF } from "jspdf";
+import emailjs from '@emailjs/browser'; // SaaS Reintegrado
 import ProductCard from '../components/ProductCard.vue';
 
 const props = defineProps(['inventory']);
@@ -10,6 +11,7 @@ const emit = defineEmits(['order-confirmed']);
 const categories = ['Todas', 'Bebidas', 'Desayunos', 'Postres'];
 const selectedCategory = ref('Todas');
 const cart = ref({});
+const discount = ref(0); // Recuperado
 const showMobileCart = ref(false);
 
 // Modal y Cobro
@@ -18,7 +20,13 @@ const amountReceived = ref(0);
 const customerName = ref('');
 const paymentMethod = ref('Efectivo');
 
-// Menú local (esto se sincroniza con tu inventario de Firebase)
+const miauFrases = [
+  "¡Que tengas un miau-ravilloso día!",
+  "Vuelve pronto por más caricias y café.",
+  "Gracias por apoyar este miau-negocio.",
+  "¡Ronroneos incluidos en tu compra!"
+];
+
 const menu = ref([
   { id: 1, name: 'Meow-chiato', price: 3.50, category: 'Bebidas', image: 'https://images.unsplash.com/photo-1541167760496-162955ed8a9f?w=400' },
   { id: 2, name: 'Cat-puccino', price: 4.50, category: 'Bebidas', image: 'https://images.unsplash.com/photo-1534778101976-62847782c213?w=400' },
@@ -30,7 +38,8 @@ const menu = ref([
 
 // --- LÓGICA ---
 const cartItems = computed(() => Object.values(cart.value));
-const total = computed(() => cartItems.value.reduce((acc, i) => acc + (i.price * i.quantity), 0));
+const subtotal = computed(() => cartItems.value.reduce((acc, i) => acc + (i.price * i.quantity), 0));
+const total = computed(() => subtotal.value - (subtotal.value * (discount.value / 100)));
 const filteredMenu = computed(() => {
   if (selectedCategory.value === 'Todas') return menu.value;
   return menu.value.filter(p => p.category === selectedCategory.value);
@@ -48,20 +57,45 @@ const updateAmount = (val) => {
   else { amountReceived.value = amountReceived.value === 0 ? val : parseFloat(current + val); }
 };
 
+// SERVICIO SAAS REINTEGRADO
 const enviarTicketEmail = async (orderData) => {
-  // Simulación para evitar el error de EmailJSResponseStatus en tu entrega
-  console.log("Conectando con SaaS EmailJS...");
-  await new Promise(r => setTimeout(r, 1000));
-  console.log("✅ SaaS: Ticket enviado al email con éxito");
+  const serviceID = "service_z6fpscw"; 
+  const templateID = "template_vmgpzye";
+  const publicKey = "yKMTGvTyH-V0e5FG7";
+
+  const templateParams = {
+    to_name: orderData.customer,
+    total: orderData.total.toFixed(2),
+    items: orderData.items.map(i => `${i.quantity}x ${i.name}`).join(", "),
+    michi_frase: miauFrases[Math.floor(Math.random() * miauFrases.length)]
+  };
+
+  try {
+    await emailjs.send(serviceID, templateID, {}, publicKey);
+    console.log("✅ SaaS: Email enviado");
+  } catch (e) {
+    console.error("Error real:", e);
+    console.log("Simulación SaaS activa (Configura tus llaves en EmailJS)");
+  }
 };
 
 const generateTicketPDF = (order) => {
-  const doc = new jsPDF({ unit: "mm", format: [80, 150] });
-  doc.setFontSize(12);
-  doc.text("CAT-FETERIA POS", 40, 10, { align: "center" });
+  const doc = new jsPDF({ unit: "mm", format: [80, 160] });
+  const frase = miauFrases[Math.floor(Math.random() * miauFrases.length)];
+
+  // Estilo recuperado
+  doc.setFillColor(paymentMethod.value === 'Efectivo' ? 255 : 59, 140, 0); 
+  doc.rect(0, 0, 80, 20, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.text(" CAT-FETERIA", 40, 12, { align: "center" });
+  
+  doc.setTextColor(0, 0, 0);
   doc.setFontSize(8);
-  doc.text(`Cliente: ${order.customer}`, 5, 20);
-  doc.text(`Total: $${order.total.toFixed(2)}`, 5, 30);
+  doc.text(`CLIENTE: ${order.customer.toUpperCase()}`, 5, 30);
+  doc.text(`TOTAL: $${order.total.toFixed(2)}`, 5, 35);
+  doc.text(frase, 40, 60, { align: "center" });
+  
   doc.save(`Ticket_${order.customer}.pdf`);
 };
 
@@ -70,11 +104,13 @@ const processSale = () => {
     customer: customerName.value || 'Cliente General',
     items: [...cartItems.value],
     total: total.value,
-    paymentMethod: paymentMethod.value
+    paymentMethod: paymentMethod.value,
+    date: new Date()
   };
+
   generateTicketPDF(finalOrder);
-  emit('order-confirmed', finalOrder); // Esto lo manda a Firebase (PaaS)
-  enviarTicketEmail(finalOrder); // Esto lo manda a EmailJS (SaaS)
+  emit('order-confirmed', finalOrder);
+  enviarTicketEmail(finalOrder);
 
   // Limpiar
   showCheckout.value = false;
@@ -82,6 +118,7 @@ const processSale = () => {
   cart.value = {};
   customerName.value = '';
   amountReceived.value = 0;
+  discount.value = 0;
 };
 </script>
 
@@ -105,77 +142,81 @@ const processSale = () => {
     </main>
 
     <aside :class="[showMobileCart ? 'translate-y-0' : 'translate-y-full md:translate-y-0']"
-      class="fixed inset-0 z-40 md:static md:w-80 lg:w-96 bg-white border-l flex flex-col shadow-2xl transition-transform duration-300 md:flex">
+      class="fixed inset-0 z-40 md:static md:w-96 bg-white border-l flex flex-col shadow-2xl transition-transform duration-300 md:flex">
       
       <div class="p-4 bg-orange-600 text-white flex justify-between items-center md:hidden">
-        <span class="font-black tracking-tighter">TU ORDEN</span>
+        <span class="font-black">MI ORDEN</span>
         <button @click="showMobileCart = false" class="text-3xl">&times;</button>
       </div>
 
-      <div class="p-4 bg-slate-50 border-b">
-        <input v-model="customerName" placeholder="Nombre del Michi-Cliente" class="w-full bg-white border rounded-xl px-4 py-2 outline-none text-sm" />
+      <div class="p-4 bg-orange-50 border-b">
+        <label class="text-[10px] font-black text-orange-800 uppercase">Michi-Cliente</label>
+        <input v-model="customerName" placeholder="Nombre" class="w-full mt-1 bg-white border rounded-lg px-3 py-2 outline-none" />
       </div>
 
-      <div class="flex-1 overflow-y-auto p-4 space-y-3">
-        <div v-if="cartItems.length === 0" class="text-center py-10 opacity-20 italic">No hay productos aún...</div>
-        <div v-for="item in cartItems" :key="item.id" class="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
-          <div class="flex flex-col">
-            <span class="font-bold text-xs">{{ item.name }}</span>
-            <span class="text-[10px] text-slate-400">Cant: {{ item.quantity }}</span>
-          </div>
+      <div class="flex-1 overflow-y-auto p-6 space-y-4">
+        <div v-if="cartItems.length === 0" class="text-center py-20 text-slate-300 italic">🐱 Esperando miau-orden...</div>
+        <div v-for="item in cartItems" :key="item.id" class="flex justify-between border-b pb-2">
+          <span class="font-bold text-sm">{{ item.quantity }}x {{ item.name }}</span>
           <span class="font-black text-sm">${{ (item.price * item.quantity).toFixed(2) }}</span>
         </div>
       </div>
 
-      <div class="p-4 bg-white border-t mb-16 md:mb-0">
-        <div class="flex justify-between items-center mb-4">
-          <span class="text-xs font-bold text-slate-400">TOTAL</span>
-          <span class="text-2xl font-black text-slate-900">${{ total.toFixed(2) }}</span>
+      <div class="p-6 bg-slate-50 border-t mb-16 md:mb-0">
+        <div class="mb-4">
+          <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">Descuento</p>
+          <div class="flex gap-2">
+            <button v-for="d in [0, 10, 15, 50]" :key="d" @click="discount = d"
+              :class="discount === d ? 'bg-orange-600 text-white' : 'bg-white text-slate-600'"
+              class="flex-1 py-1 rounded-lg text-xs font-bold border transition-all">{{ d }}%</button>
+          </div>
+        </div>
+        <div class="flex justify-between items-end mb-4 px-1">
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Total</span>
+          <span class="text-3xl font-black text-slate-900">${{ total.toFixed(2) }}</span>
         </div>
         <button @click="showCheckout = true" :disabled="cartItems.length === 0"
-          class="w-full bg-orange-600 disabled:bg-slate-200 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all">
-          COBRAR AHORA 🐾
+          class="w-full bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all">
+          COBRAR AHORA
         </button>
       </div>
     </aside>
 
     <button v-if="cartItems.length > 0 && !showMobileCart && !showCheckout" 
       @click="showMobileCart = true"
-      class="fixed bottom-6 right-6 z-30 md:hidden bg-orange-600 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 animate-bounce">
+      class="fixed bottom-6 right-6 z-30 md:hidden bg-orange-600 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-3">
       <span class="font-black text-lg">${{ total.toFixed(2) }}</span>
-      <span class="bg-white text-orange-600 px-2 py-1 rounded-lg text-[10px] font-black">{{ cartItems.length }}</span>
     </button>
 
-    <div v-if="showCheckout" class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-50 flex items-end md:items-center justify-center">
-      <div class="bg-white rounded-t-[2rem] md:rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-slide-up">
-        <div class="p-8 text-center bg-slate-50">
-          <p class="text-xs font-bold text-slate-400 mb-1 uppercase">Total a pagar</p>
+    <div v-if="showCheckout" class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+      <div class="bg-white rounded-t-[2.5rem] md:rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-slide-up">
+        <div class="p-6 text-center bg-slate-50 border-b">
           <p class="text-5xl font-black text-orange-600">${{ total.toFixed(2) }}</p>
         </div>
 
         <div class="p-6">
-          <div class="flex gap-2 mb-6">
-            <button @click="paymentMethod = 'Efectivo'" :class="paymentMethod === 'Efectivo' ? 'bg-green-600 text-white' : 'bg-slate-100'" class="flex-1 py-3 rounded-xl font-bold text-xs transition-all">EFECTIVO</button>
-            <button @click="paymentMethod = 'Tarjeta'" :class="paymentMethod === 'Tarjeta' ? 'bg-blue-600 text-white' : 'bg-slate-100'" class="flex-1 py-3 rounded-xl font-bold text-xs transition-all">TARJETA</button>
+          <div class="flex gap-3 mb-6">
+            <button @click="paymentMethod = 'Efectivo'" :class="paymentMethod === 'Efectivo' ? 'bg-green-600 text-white' : 'bg-slate-100'" class="flex-1 py-4 rounded-2xl font-bold">💵 EFECTIVO</button>
+            <button @click="paymentMethod = 'Tarjeta'" :class="paymentMethod === 'Tarjeta' ? 'bg-blue-600 text-white' : 'bg-slate-100'" class="flex-1 py-4 rounded-2xl font-bold">💳 TARJETA</button>
           </div>
 
-          <div v-if="paymentMethod === 'Efectivo'" class="space-y-4">
-             <div class="bg-slate-900 rounded-2xl p-4 text-white text-center">
-                <p class="text-[10px] text-slate-500 uppercase">Recibido</p>
-                <p class="text-2xl font-mono">${{ amountReceived }}</p>
-                <p v-if="amountReceived >= total" class="text-green-400 text-xs mt-1">Cambio: ${{ (amountReceived - total).toFixed(2) }}</p>
-             </div>
-             <div class="grid grid-cols-4 gap-2">
-                <button v-for="n in [1,2,3,4,5,6,7,8,9,0,'.','C']" :key="n" @click="updateAmount(n)" class="bg-slate-100 p-3 rounded-xl font-bold hover:bg-slate-200 active:bg-slate-300">{{ n }}</button>
-             </div>
+          <div v-if="paymentMethod === 'Efectivo'" class="grid grid-cols-12 gap-4">
+            <div class="col-span-12 md:col-span-5 bg-slate-900 rounded-2xl p-4 text-white text-center">
+              <p class="text-[10px] text-slate-400 font-bold uppercase">Recibido</p>
+              <p class="text-3xl font-mono">${{ amountReceived }}</p>
+            </div>
+            <div class="col-span-12 md:col-span-7 grid grid-cols-4 gap-2">
+              <button v-for="n in [1,2,3,4,5,6,7,8,9,0,'.','C']" :key="n" @click="updateAmount(n)"
+                class="bg-slate-100 font-black p-4 rounded-xl active:bg-slate-300">{{ n }}</button>
+            </div>
           </div>
         </div>
 
-        <div class="p-6 bg-slate-50 flex gap-3">
-          <button @click="showCheckout = false" class="flex-1 py-4 font-bold text-slate-400">Cancelar</button>
+        <div class="p-6 bg-slate-50 flex gap-4">
+          <button @click="showCheckout = false" class="flex-1 py-4 font-bold text-slate-400">Volver</button>
           <button @click="processSale" :disabled="amountReceived < total && paymentMethod === 'Efectivo'"
-            class="flex-[2] bg-orange-600 disabled:bg-slate-300 text-white font-black py-4 rounded-2xl shadow-xl transition-all">
-            FINALIZAR VENTA
+            class="flex-[2] bg-green-600 text-white font-black py-4 rounded-2xl shadow-xl transition-all">
+            FINALIZAR VENTA 🐾
           </button>
         </div>
       </div>
@@ -186,17 +227,8 @@ const processSale = () => {
 <style scoped>
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .animate-slide-up { animation: slideUp 0.3s ease-out; }
-
-@keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @media (min-width: 768px) {
-  .animate-slide-up { animation: scaleIn 0.2s ease-out; }
-  @keyframes scaleIn {
-    from { transform: scale(0.9); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
-  }
+  @keyframes slideUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 }
 </style>
