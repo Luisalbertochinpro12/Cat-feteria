@@ -28,12 +28,12 @@ const miauFrases = [
 ];
 
 const menu = ref([
-  { id: 1, name: 'Meow-chiato', price: 3.50, category: 'Bebidas', image: 'https://images.unsplash.com/photo-1541167760496-162955ed8a9f?w=400' },
+  { id: 1, name: 'Meow-chiato', price: 3.50, category: 'Bebidas', image: 'https://thecoffeeguru.net/storage/2024/01/featured-image_1-10.webp' },
   { id: 2, name: 'Cat-puccino', price: 4.50, category: 'Bebidas', image: 'https://images.unsplash.com/photo-1534778101976-62847782c213?w=400' },
   { id: 3, name: 'Michi-Toast', price: 8.00, category: 'Desayunos', image: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=400' },
   { id: 4, name: 'Muffin Miau', price: 2.50, category: 'Postres', image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=400' },
-  { id: 5, name: 'Hot Cakes Garrita', price: 6.50, category: 'Desayunos', image: 'https://images.unsplash.com/photo-1528452632455-1155806fe29a?w=400' },
-  { id: 6, name: 'Miau-Latte', price: 4.00, category: 'Bebidas', image: 'https://images.unsplash.com/photo-1461023058943-07fcaf18358b?w=400' }
+  { id: 5, name: 'Hot Cakes Garrita', price: 6.50, category: 'Desayunos', image: 'https://media.airedesantafe.com.ar/p/78882ff2fc65ee34d967a13bc6133934/adjuntos/268/imagenes/003/785/0003785863/1200x0/smart/como-hacer-hot-cakes-la-deliciosa-receta-el-desayuno.png' },
+  { id: 6, name: 'Miau-Latte', price: 4.00, category: 'Bebidas', image: 'https://www.foodandwine.com/thmb/CCe2JUHfjCQ44L0YTbCu97ukUzA=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Partners-Latte-FT-BLOG0523-09569880de524fe487831d95184495cc.jpg' }
 ]);
 
 // --- LÓGICA ---
